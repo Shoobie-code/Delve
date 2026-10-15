@@ -1,0 +1,1678 @@
+local n = {
+		on = false,
+		mine = true,
+		walk = false,
+		radius = .69,
+		reach = 1.29,
+		combat = true,
+		chase = true,
+		fightDist = 8,
+		dodge = true,
+		autoRoll = true,
+		chests = true,
+		autoReplay = false,
+	};
+local a = _G.Strata;
+if a and a.stop then
+	pcall(a.stop);
+end;
+_G.Strata = { cfg = (a and a.cfg) or n };
+local s = _G.Strata;
+local m = s.cfg;
+for n, a in pairs(n) do
+	if m[n] == nil then
+		m[n] = a;
+	end;
+end;
+local j = {
+		"mine",
+		"walk",
+		"combat",
+		"chase",
+		"dodge",
+		"autoRoll",
+		"chests",
+	};
+local function X(n)
+	m.on = n and true or false;
+	s.farmOn = m.on;
+	for n, a in ipairs(j) do
+		m[a] = m.on;
+	end;
+end;
+X(m.on);
+local A = game:GetService("Players") or game.Players;
+local O = game:GetService("ReplicatedStorage") or game.ReplicatedStorage;
+local u = game:GetService("RunService") or game.RunService;
+local q = A.LocalPlayer;
+local c = os.clock;
+local S = 8;
+local H = .31;
+local V = 67108864;
+if not O:FindFirstChild("StrataNet") then
+	print("delve: StrataNet not found, wrong game?");
+	return;
+end;
+local function t(n)
+	local a, s = 0, nil;
+	for n, m in ipairs(n:GetDescendants()) do
+		local j = m.ClassName;
+		if j == "Part" or j == "MeshPart" then
+			a = a + 1;
+			if not s then
+				s = m.Color;
+			end;
+		end;
+	end;
+	local m = s and string.format("%d,%d,%d", math.floor(s.R + .5), math.floor(s.G + .5), math.floor(s.B + .5)) or "-";
+	return a, m;
+end;
+local C, F = {}, {};
+local J = {};
+do
+	local n = O:FindFirstChild("Assets");
+	local a = n and n:FindFirstChild("Rocks");
+	if a then
+		for n, a in ipairs(a:GetChildren()) do
+			local s, m = t(a);
+			C[s .. ("|" .. m)] = a.Name;
+			if F[s] == nil then
+				F[s] = a.Name;
+			else
+				F[s] = false;
+			end;
+		end;
+	end;
+	local s = n and n:FindFirstChild("Mobs");
+	if s then
+		for n, a in ipairs(s:GetChildren()) do
+			J[a.Name] = true;
+		end;
+	end;
+end;
+local k = { DelveCursedRock = true, DelveSporeBloom = true };
+local i = {
+		DelveTimeCrystal = 25,
+		DelveTreasureGeode = 25,
+		DelveRelicFountain = 15,
+		DelveBlastRock = 3,
+	};
+local function f(n)
+	if k[n] then
+		return -6;
+	end;
+	if i[n] then
+		return i[n];
+	end;
+	local a = tonumber(n and n:match("(%d+)$"));
+	if not a or a <= 1 then
+		return 1;
+	end;
+	return a * a;
+end;
+local D = {};
+local R = nil;
+local o = nil;
+local K, g, p = {}, nil, false;
+local G = {};
+local function d(n)
+	local a = 10;
+	local m = workspace:FindFirstChild("StrataPlate");
+	if not m then
+		if R then
+			D, R, o = {}, nil, nil;
+		end;
+		return false;
+	end;
+	local j = m.Address;
+	if j ~= R then
+		D, R, o, s.lastAim = {}, j, nil, nil;
+	end;
+	local X = m:FindFirstChild("Ground");
+	local A = X and X:GetChildren();
+	local O = A and (A[1] and A[1].Address);
+	if O ~= g then
+		g, K, p, G = O, {}, true, {};
+		for n, a in ipairs(A or {}) do
+			local s, m = a.Name:match("^Tile_(%d+)_(%d+)$");
+			if s then
+				local n = a.Position;
+				s, m = tonumber(s), tonumber(m);
+				K[#K + 1] = {
+						cx = s,
+						cz = m,
+						wx = n.X,
+						wz = n.Z,
+						wy = n.Y,
+					};
+				G[s * 4096 + m] = true;
+			end;
+		end;
+	end;
+	local u = {};
+	for m, j in ipairs(m:GetChildren()) do
+		local X = j.Name;
+		local A = tonumber(X);
+		if A then
+			u[X] = true;
+			local m = j.Address;
+			local O = D[X];
+			if O and O.addr ~= m then
+				D[X] = nil;
+				s.lastAim = nil;
+				if #K < 3 then
+					o = nil;
+				end;
+			end;
+			if not D[X] then
+				local n = j:FindFirstChildOfClass("Part") or j:FindFirstChildOfClass("MeshPart");
+				if n or j.ClassName == "Part" then
+					local a = ((n or j)).Position;
+					local s, O;
+					if A >= V then
+						local n = A - V;
+						s = math.floor(n / 1024);
+						O = (n - s * 1024) + .5;
+						s = s + .5;
+					else
+						s = math.floor(A / 1024);
+						O = A - s * 1024;
+					end;
+					local u, q = t(j);
+					local c = C[u .. ("|" .. q)] or F[u] or "?";
+					D[X] = {
+							cx = s,
+							cz = O,
+							wx = a.X,
+							wy = a.Y,
+							wz = a.Z,
+							kind = c,
+							addr = m,
+						};
+				end;
+			else
+				local s = D[X];
+				local m = not s.settled or (a > 0 and n - ((s.readAt or 0)) > 3);
+				if m then
+					if s.settled then
+						a = a - 1;
+					end;
+					local m = j:FindFirstChildOfClass("Part") or j:FindFirstChildOfClass("MeshPart");
+					local X = ((m or j)).Position;
+					if typeof(X) == "Vector3" then
+						s.readAt = n;
+						if math.abs(X.Y - s.wy) < .05 and (math.abs(X.X - s.wx) < .05 and math.abs(X.Z - s.wz) < .05) then
+							s.stillSince = s.stillSince or n;
+							if n - s.stillSince >= 1.5 then
+								s.settled = true;
+							end;
+						else
+							s.stillSince, s.settled = nil, false;
+							if #K < 3 then
+								o = nil;
+							end;
+						end;
+						s.wx, s.wy, s.wz = X.X, X.Y, X.Z;
+					end;
+				end;
+			end;
+		end;
+	end;
+	for n in pairs(D) do
+		if not u[n] then
+			D[n] = nil;
+		end;
+	end;
+	return true;
+end;
+s.debugRocks = function()
+		local n, a = 0, nil;
+		for s, m in pairs(D) do
+			n = n + 1;
+			a = a or string.format("%s@%.0f,%.0f,%.0f", s, m.wx, m.wy, m.wz);
+		end;
+		return n, a, R, o ~= nil;
+	end;
+local function E(n, a)
+	local s = (n[1] * ((n[5] * n[9] - n[6] * n[8])) - n[2] * ((n[4] * n[9] - n[6] * n[7]))) + n[3] * ((n[4] * n[8] - n[5] * n[7]));
+	if math.abs(s) < 1e-09 then
+		return nil;
+	end;
+	local function m(n, a, s)
+		return (n[1] * ((a[2] * s[3] - a[3] * s[2])) - a[1] * ((n[2] * s[3] - n[3] * s[2]))) + s[1] * ((n[2] * a[3] - n[3] * a[2]));
+	end;
+	local j, X, A = { n[1], n[4], n[7] }, { n[2], n[5], n[8] }, { n[3], n[6], n[9] };
+	return { m(a, X, A) / s, m(j, a, A) / s, m(j, X, a) / s };
+end;
+local function U(n, a, s, m)
+	local j = {
+			0,
+			0,
+			0,
+			0,
+			0,
+			0,
+			0,
+			0,
+			0,
+		};
+	local X = { 0, 0, 0 };
+	for n, A in ipairs(n) do
+		local O, u, q = A[a], A[s], A[m];
+		j[1] = j[1] + O * O;
+		j[2] = j[2] + O * u;
+		j[3] = j[3] + O;
+		j[5] = j[5] + u * u;
+		j[6] = j[6] + u;
+		j[9] = j[9] + 1;
+		X[1] = X[1] + O * q;
+		X[2] = X[2] + u * q;
+		X[3] = X[3] + q;
+	end;
+	j[4], j[7], j[8] = j[2], j[3], j[6];
+	return E(j, X);
+end;
+local function W(n)
+	if #K >= 3 then
+		if p or not o then
+			p = false;
+			local n, a = U(K, "wx", "wz", "cx"), U(K, "wx", "wz", "cz");
+			local s, m = U(K, "cx", "cz", "wx"), U(K, "cx", "cz", "wz");
+			if n and (a and (s and m)) then
+				return {
+					toCx = n,
+					toCz = a,
+					toWx = s,
+					toWz = m,
+					y = K[1].wy + 1.8,
+				};
+			end;
+		else
+			return o;
+		end;
+	end;
+	if #n < 3 then
+		return o;
+	end;
+	local a = U(n, "wx", "wz", "cx");
+	local s = U(n, "wx", "wz", "cz");
+	local m = U(n, "cx", "cz", "wx");
+	local j = U(n, "cx", "cz", "wz");
+	if not ((a and (s and (m and j)))) then
+		return o;
+	end;
+	local X = 0;
+	for n, a in ipairs(n) do
+		X = X + a.wy;
+	end;
+	return {
+		toCx = a,
+		toCz = s,
+		toWx = m,
+		toWz = j,
+		y = X / #n,
+	};
+end;
+local function r(n, a, s)
+	return (n.toCx[1] * a + n.toCx[2] * s) + n.toCx[3], (n.toCz[1] * a + n.toCz[2] * s) + n.toCz[3];
+end;
+local function L(n, a, s)
+	return Vector3.new((n.toWx[1] * a + n.toWx[2] * s) + n.toWx[3], n.y, (n.toWz[1] * a + n.toWz[2] * s) + n.toWz[3]);
+end;
+local I, Z, Y, x, N = .707, -0.707, -0.707, -0.707, .91;
+local function b()
+	local n = workspace.CurrentCamera;
+	if not n then
+		return;
+	end;
+	local a = n.CFrame;
+	local s, m = a.RightVector, a.LookVector;
+	local j = math.sqrt(s.X * s.X + s.Z * s.Z);
+	local X = math.sqrt(m.X * m.X + m.Z * m.Z);
+	if j < .001 or X < .001 then
+		return;
+	end;
+	I, Z, Y, x = s.X / j, s.Z / j, m.X / X, m.Z / X;
+	N = math.max(.2, math.min(1, -m.Y));
+end;
+local function Q(n, a)
+	local s = n * I + a * Z;
+	local m = ((n * Y + a * x)) * N;
+	return math.sqrt(s * s + m * m);
+end;
+local h = nil;
+local T = nil;
+local w = nil;
+local e = 0;
+local function v(n, a, s, m, j)
+	local X = Q(s - n, m - a);
+	if X <= j or X < 1e-06 then
+		return s, m;
+	end;
+	local A = j / X;
+	return n + ((s - n)) * A, a + ((m - a)) * A;
+end;
+local function y(n)
+	local a = {};
+	for n, s in ipairs(n) do
+		local m = math.floor(s.cx) * 4096 + math.floor(s.cz);
+		local j = a[m];
+		if not j then
+			j = {};
+			a[m] = j;
+		end;
+		j[#j + 1] = s;
+	end;
+	return a;
+end;
+local function M(n, a, s, m)
+	local j, X = 0, 0;
+	local A = math.ceil(m) + 1;
+	local O, u = math.floor(a), math.floor(s);
+	for O = O - A, O + A, 1 do
+		for A = u - A, u + A, 1 do
+			local u = n[O * 4096 + A];
+			if u then
+				for n, A in ipairs(u) do
+					if Q(A.cx - a, A.cz - s) <= m then
+						j = j + A.w;
+						if A.w > 0 then
+							X = X + 1;
+						end;
+					end;
+				end;
+			end;
+		end;
+	end;
+	return j, X;
+end;
+local function z(n, a, s, m)
+	local j = {};
+	local X = math.ceil(2 * s);
+	for n, A in ipairs(n) do
+		if A.w > 0 then
+			j[#j + 1] = { A.cx, A.cz };
+			if m then
+				for n = -0.5, .5, 1 do
+					for a = -0.5, .5, 1 do
+						j[#j + 1] = { A.cx + n, A.cz + a };
+					end;
+				end;
+				local n, m = math.floor(A.cx), math.floor(A.cz);
+				for n = n - X, n + X, 1 do
+					for m = m - X, m + X, 1 do
+						local X = a[n * 4096 + m];
+						if X then
+							for n, a in ipairs(X) do
+								if a.w > 0 and (((a.cx > A.cx or (a.cx == A.cx and a.cz > A.cz))) and Q(a.cx - A.cx, a.cz - A.cz) <= 2 * s) then
+									j[#j + 1] = { ((A.cx + a.cx)) / 2, ((A.cz + a.cz)) / 2 };
+								end;
+							end;
+						end;
+					end;
+				end;
+			end;
+		end;
+	end;
+	return j;
+end;
+local function l(n, a)
+	h, w = nil, nil;
+	local j = {};
+	for a, s in pairs(D) do
+		if math.abs(s.wy - n.Y) < 6 then
+			s.name = a;
+			s.w = s.skip and 0 or f(s.kind);
+			j[#j + 1] = s;
+		end;
+	end;
+	o = W(j);
+	s.rockCount = #j;
+	if not s.prevCount or #j < s.prevCount or #j > s.prevCount + 2 then
+		s.progressAt = a;
+	end;
+	s.prevCount = #j;
+	if not o or #j == 0 then
+		T = nil;
+		return;
+	end;
+	local X, A = r(o, n.X, n.Z);
+	s.cell = { X, A };
+	local O = math.max(.3, m.reach) * .95;
+	local u = ((math.max(.1, m.radius) + H)) * .85;
+	local q = y(j);
+	local c = 0;
+	for n, a in ipairs(j) do
+		if a.w > 0 then
+			c = c + 1;
+		end;
+	end;
+	local S = c >= 5;
+	if s.clusterOn ~= nil and s.clusterOn ~= S then
+		T = nil;
+	end;
+	s.clusterOn = S;
+	local V = {};
+	for n, a in ipairs(j) do
+		if Q(a.cx - X, a.cz - A) <= (O + u) + .5 then
+			V[#V + 1] = a;
+		end;
+	end;
+	local t = nil;
+	for n, a in ipairs(z(V, q, u, S)) do
+		local s, m = v(X, A, a[1], a[2], O);
+		local j, c = M(q, s, m, u);
+		if c > 0 and j > 0 then
+			local n = Q(s - X, m - A);
+			if not t or j > t.score + 1e-06 or (math.abs(j - t.score) < 1e-06 and n < t.d) then
+				t = {
+						ax = s,
+						az = m,
+						score = j,
+						n = c,
+						d = n,
+					};
+			end;
+		end;
+	end;
+	local C = s.lastAim;
+	if C and not S then
+		local n = false;
+		for a, s in ipairs(j) do
+			if s.w > 0 and (math.abs(s.cx - C.ax) < .01 and math.abs(s.cz - C.az) < .01) then
+				n = true;
+				break;
+			end;
+		end;
+		if not n then
+			C = nil;
+		end;
+	end;
+	if t and C then
+		local n, a = v(X, A, C.ax, C.az, O);
+		local s, m = M(q, n, a, u);
+		if m > 0 and s >= t.score * .85 then
+			t = {
+					ax = n,
+					az = a,
+					score = s,
+					n = m,
+					d = Q(n - X, a - A),
+				};
+		end;
+	end;
+	h = t;
+	s.lastAim = t;
+	if T then
+		T.score = M(q, T.ax, T.az, u);
+		if T.score <= 0 then
+			T = nil;
+		end;
+	end;
+	if not T or a - e >= .5 then
+		e = a;
+		local n = nil;
+		for a, s in ipairs(z(j, q, u, S)) do
+			local m, j = M(q, s[1], s[2], u);
+			if j > 0 and m > 0 then
+				local a = m / ((1 + .04 * Q(s[1] - X, s[2] - A)));
+				if not n or a > n.v then
+					n = {
+							ax = s[1],
+							az = s[2],
+							score = m,
+							v = a,
+						};
+				end;
+			end;
+		end;
+		if n and ((not T or n.score > T.score * 1.3)) then
+			T = n;
+		end;
+	end;
+	s.walkGoal = T;
+	if not t then
+		s.progressAt = a;
+	end;
+	local F = a - ((s.progressAt or a));
+	if F > 9 and t then
+		for n, a in ipairs(j) do
+			if Q(a.cx - t.ax, a.cz - t.az) <= u then
+				a.skip = true;
+			end;
+		end;
+		s.progressAt, s.lastAim, T = a, nil, nil;
+		s.skipped = ((s.skipped or 0)) + 1;
+	end;
+	s.stalled = F > 4;
+	if T then
+		local n = Q(T.ax - X, T.az - A);
+		if (s.stalled and n > .35) or (n > O * .85 and ((not t or T.score > t.score * 1.2))) then
+			w = L(o, T.ax, T.az);
+		end;
+	end;
+end;
+local B = {};
+local P = nil;
+local function n8(n, a, s, m)
+	local j = a:FindFirstChild("Torso") or a:FindFirstChild("HumanoidRootPart") or a:FindFirstChild("Head");
+	local X = j and j.Position;
+	if typeof(X) ~= "Vector3" then
+		return;
+	end;
+	if n.t and s - n.t > .001 then
+		local a = s - n.t;
+		local m, j = ((X.X - n.x)) / a, ((X.Z - n.z)) / a;
+		if math.abs(m) > 80 or math.abs(j) > 80 then
+			m, j = 0, 0;
+		end;
+		n.vx = ((n.vx or 0)) * .5 + m * .5;
+		n.vz = ((n.vz or 0)) * .5 + j * .5;
+	end;
+	n.x, n.y, n.z, n.t = X.X, X.Y, X.Z, s;
+	if m or not n.hpT or s - n.hpT > .25 then
+		n.hpT = s;
+		local m = a:FindFirstChildOfClass("Humanoid");
+		if m then
+			n.hp, n.max = m.Health, m.MaxHealth;
+		end;
+	end;
+end;
+local function a8(n, a, s)
+	n.chk = s;
+	if a:GetAttribute("MobId") == nil then
+		n.owned = false;
+		n.pending = true;
+		return;
+	end;
+	n.pending = nil;
+	local m = a:GetAttribute("Owner");
+	if m ~= nil then
+		n.owned = m == q.UserId;
+	else
+		local s = a:GetAttribute("RunId");
+		n.owned = s == nil or s == P;
+	end;
+end;
+local s8 = {};
+local m8 = {};
+local function j8(n, a)
+	local s = n:FindFirstChild("Body");
+	local m = s and s.Position;
+	if typeof(m) ~= "Vector3" then
+		return nil;
+	end;
+	if a and ((m.X - a.X)) ^ 2 + ((m.Z - a.Z)) ^ 2 > 14400 then
+		return nil;
+	end;
+	local j = n.Address;
+	local X = m8[j];
+	if X == nil then
+		local a = n:GetAttribute("Viewer");
+		local s = n:GetAttribute("Owner");
+		X = ((a == nil or a == q.UserId)) and (((s == nil or s == q.UserId)) and not n:GetAttribute("HiddenFor_" .. q.UserId));
+		m8[j] = X;
+	end;
+	if not X then
+		return nil;
+	end;
+	local A = n:GetAttribute("ChestState");
+	if A == "open" then
+		return nil;
+	end;
+	return j, {
+		x = m.X,
+		z = m.Z,
+		locked = A ~= "unlocked",
+		state = A,
+	};
+end;
+local function X8(n)
+	P = q:GetAttribute("RunId");
+	local a = workspace:GetChildren();
+	local s = {};
+	local j = q.Character;
+	local X = j and j:FindFirstChild("HumanoidRootPart");
+	local A = X and X.Position;
+	local O = {};
+	for a, j in ipairs(a) do
+		local X = j.Name;
+		if X == "DelveChest" and m.chests then
+			local n, a = j8(j, A);
+			if n then
+				O[n] = a;
+			end;
+		elseif J[X] then
+			local m = j.Address;
+			s[m] = true;
+			local X = B[m];
+			if not X then
+				X = { name = j.Name };
+				B[m] = X;
+			end;
+			X.idx = a;
+			if X.owned == nil or (not X.owned and n - X.chk > ((X.pending and .4 or 2))) then
+				a8(X, j, n);
+			end;
+			if X.owned then
+				n8(X, j, n);
+			end;
+		end;
+	end;
+	for n in pairs(B) do
+		if not s[n] then
+			B[n] = nil;
+		end;
+	end;
+	s8 = O;
+end;
+local function A8(n)
+	local a, s = nil, nil;
+	for m, j in pairs(s8) do
+		if not j.locked then
+			local m = ((j.x - n.X)) ^ 2 + ((j.z - n.Z)) ^ 2;
+			if not s or m < s then
+				a, s = j, m;
+			end;
+		end;
+	end;
+	return a;
+end;
+local function O8(n)
+	local a = nil;
+	for s, m in pairs(B) do
+		if m.owned then
+			a = a or workspace:GetChildren();
+			local j = a[m.idx];
+			if not j or j.Address ~= s then
+				j = nil;
+				for n = math.max(1, m.idx - 12), math.min(#a, m.idx + 12), 1 do
+					local X = a[n];
+					if X.Address == s then
+						j, m.idx = X, n;
+						break;
+					end;
+				end;
+			end;
+			if j then
+				n8(m, j, n);
+			else
+				B[s] = nil;
+			end;
+		end;
+	end;
+end;
+local function u8(n, a, s)
+	local m = workspace:GetChildren();
+	local j = m[a.idx];
+	if j and j.Address == n then
+		a.dead = j:GetAttribute("Dead") and true or false;
+	end;
+end;
+local function q8(n, a)
+	local s = math.min(.15, a - ((n.t or a)));
+	return Vector3.new(n.x + ((n.vx or 0)) * s, n.y, n.z + ((n.vz or 0)) * s);
+end;
+local function c8()
+	local n = {};
+	for a, s in pairs(B) do
+		if s.owned and (s.x and (not s.dead and ((s.hp == nil or s.hp > 0)))) then
+			s.addr = a;
+			n[#n + 1] = s;
+		end;
+	end;
+	return n;
+end;
+local S8 = {};
+local H8 = { "Hazards", "MobTelegraphs" };
+local function V8(n)
+	local a = math.sqrt(n.X * n.X + n.Z * n.Z);
+	if a < .001 then
+		return 0, 0;
+	end;
+	return n.X / a, n.Z / a;
+end;
+local t8 = {};
+local function C8(n)
+	return n > .05 and n < .065;
+end;
+local function F8(n, a)
+	local s = { { v = n.RightVector, s = a.X }, { v = n.UpVector, s = a.Y }, { v = n.LookVector, s = a.Z } };
+	local m, j = 1, -1;
+	for n, a in ipairs(s) do
+		local s = math.abs(a.v.Y);
+		if s > j then
+			m, j = n, s;
+		end;
+	end;
+	local X = s[m].s;
+	table.remove(s, m);
+	local A, O = V8(s[1].v);
+	local u, q = V8(s[2].v);
+	local c, S = s[1].s / 2, s[2].s / 2;
+	local H = n.Position;
+	return {
+		x = H.X,
+		z = H.Z,
+		ax = A,
+		az = O,
+		bx = u,
+		bz = q,
+		h1 = c,
+		h2 = S,
+		circle = math.abs(c - S) <= .06 * math.max(c, S),
+	}, X;
+end;
+local function J8(n, a)
+	for n, a in pairs(t8) do
+		a.seen = false;
+	end;
+	local function s(n, a)
+		if n.circle and a.circle then
+			if ((n.x - a.x)) ^ 2 + ((n.z - a.z)) ^ 2 < .01 and a.h1 < n.h1 - .01 then
+				return a.h1 / n.h1;
+			end;
+		elseif not n.circle and (not a.circle and (math.abs(n.h1 - a.h1) < .05 and (n.bx * a.bx + n.bz * a.bz > .99 and a.h2 < n.h2 - .01))) then
+			local s, m = n.x - n.bx * n.h2, n.z - n.bz * n.h2;
+			local j, X = a.x - a.bx * a.h2, a.z - a.bz * a.h2;
+			if ((s - j)) ^ 2 + ((m - X)) ^ 2 < .04 then
+				return a.h2 / n.h2;
+			end;
+		end;
+		return nil;
+	end;
+	for m, j in ipairs(n) do
+		local X, A, O = nil, 0, false;
+		for n, a in ipairs(n) do
+			if m ~= n then
+				local n = s(j, a);
+				if n then
+					X, A = n, A + 1;
+				elseif s(a, j) then
+					O = true;
+				end;
+			end;
+		end;
+		if A == 1 and not O then
+			local n = string.format("%d:%d:%d", math.floor(j.x * 4 + .5), math.floor(j.z * 4 + .5), math.floor(((j.h1 + j.h2)) * 4 + .5));
+			local s = t8[n];
+			if not s or X < s.p - .05 then
+				s = { p0 = X, t0 = a };
+				t8[n] = s;
+			end;
+			s.zone, s.p, s.seen = j, X, true;
+			if a - s.t0 > .05 and X > s.p0 + .01 then
+				s.hitAt = s.t0 + (((1 - s.p0)) * ((a - s.t0))) / ((X - s.p0));
+			end;
+		end;
+	end;
+	for n, s in pairs(t8) do
+		if not s.seen and a - ((s.hitAt or s.t0)) > .3 then
+			t8[n] = nil;
+		end;
+	end;
+end;
+local function k8(n, a)
+	S8 = {};
+	local j = {};
+	for a, s in ipairs(H8) do
+		local m = workspace:FindFirstChild(s);
+		if m then
+			for a, s in ipairs(m:GetChildren()) do
+				local m = s.Size;
+				if typeof(m) == "Vector3" then
+					local a = math.max(m.X, m.Y, m.Z) >= 1.5;
+					local X = C8(m.X) or C8(m.Y) or C8(m.Z);
+					if a or X then
+						local X = s.CFrame;
+						local A = X.Position;
+						if not n or ((A.X - n.X)) ^ 2 + ((A.Z - n.Z)) ^ 2 < 3600 then
+							local n, s = F8(X, m);
+							if a then
+								S8[#S8 + 1] = n;
+							end;
+							if C8(s) then
+								j[#j + 1] = n;
+							end;
+						end;
+					end;
+				end;
+			end;
+		end;
+	end;
+	s.zoneCount = #S8;
+	if m.autoRoll then
+		J8(j, a or c());
+	end;
+end;
+local function i8(n, a, s, m)
+	local j, X = a - n.x, s - n.z;
+	local A = j * n.ax + X * n.az;
+	local O = j * n.bx + X * n.bz;
+	if n.circle then
+		local a = n.h1 + m;
+		local s = math.sqrt(A * A + O * O);
+		if s >= a then
+			return nil;
+		end;
+		if s < .2 then
+			return a, n.ax, n.az;
+		end;
+		return a - s, j / s, X / s;
+	end;
+	local u, q = (n.h1 + m) - math.abs(A), (n.h2 + m) - math.abs(O);
+	if u <= 0 or q <= 0 then
+		return nil;
+	end;
+	if u < q then
+		local a = A >= 0 and 1 or -1;
+		return u, n.ax * a, n.az * a;
+	end;
+	local c = O >= 0 and 1 or -1;
+	return q, n.bx * c, n.bz * c;
+end;
+local f8 = 2.5;
+local D8 = {
+		W = 87,
+		A = 65,
+		S = 83,
+		D = 68,
+	};
+local R8 = {};
+local function o8(n, a)
+	if ((R8[n] or false)) == a then
+		return;
+	end;
+	R8[n] = a;
+	if a then
+		keypress(D8[n]);
+	else
+		keyrelease(D8[n]);
+	end;
+end;
+local function K8()
+	for n in pairs(D8) do
+		o8(n, false);
+	end;
+end;
+local g8, p8, G8 = 81, 49, 50;
+local d8, E8 = nil, nil;
+local function U8(n, a)
+	if d8 then
+		return false;
+	end;
+	keypress(n);
+	d8, E8 = n, a;
+	return true;
+end;
+local function W8(n)
+	if U8(g8, n) then
+		s.rolls = ((s.rolls or 0)) + 1;
+	end;
+end;
+local function r8(n, a)
+	if d8 and ((a or n - E8 >= .05)) then
+		keyrelease(d8);
+		d8 = nil;
+	end;
+end;
+local function L8(n, a)
+	if not n then
+		K8();
+		return;
+	end;
+	local s = math.sqrt(n * n + a * a);
+	if s < .001 then
+		K8();
+		return;
+	end;
+	n, a = n / s, a / s;
+	local m = n * Y + a * x;
+	local j = n * I + a * Z;
+	o8("W", m > .38);
+	o8("S", m < -0.38);
+	o8("D", j > .38);
+	o8("A", j < -0.38);
+end;
+local I8, Z8, Y8 = false, true, -1000000000.0;
+local x8;
+local function N8(n)
+	if c() - Y8 < 10 then
+		if not n then
+			notify("stats scan already ran in the last 10 s", "delve", 3);
+		end;
+		return;
+	end;
+	I8, Z8 = true, n;
+end;
+s.readStats = N8;
+local function b8()
+	I8 = false;
+	Y8 = c();
+	local n, a = pcall(getgc, "RuneFind");
+	local j = { Radius = {}, Reach = {} };
+	if n and type(a) == "table" then
+		local n = 0;
+		for s = 1, #a, 1 do
+			local m = a[s];
+			if n >= 40 then
+				break;
+			end;
+			if m and (m.key == "RuneFind" and tostring(m.type) == "number") then
+				n = n + 1;
+				local a, s = pcall(readtbl, m.tbl - 768, 64);
+				if a and type(s) == "table" then
+					for n, a in ipairs(s) do
+						local s = tonumber(a.value);
+						if s and j[a.key] then
+							local n = string.format("%.4f", s);
+							j[a.key][n] = ((j[a.key][n] or 0)) + 1;
+						end;
+					end;
+				end;
+			end;
+		end;
+	end;
+	local function X(n, a, s)
+		local m, j = nil, 0;
+		for n, X in pairs(n) do
+			local A = tonumber(n);
+			if A and (A >= a and (A <= s and X > j)) then
+				m, j = A, X;
+			end;
+		end;
+		return m;
+	end;
+	local A, O = X(j.Radius, .1, 10), X(j.Reach, .3, 20);
+	if A then
+		m.radius = A;
+	end;
+	if O then
+		m.reach = O;
+	end;
+	if A or O then
+		s.statsFound = true;
+	end;
+	if x8 then
+		x8();
+	end;
+	if A or O then
+		notify(string.format("radius %.2f  reach %.2f", m.radius, m.reach), "delve stats", 4);
+	elseif not Z8 then
+		notify("no session stats found, start a run first", "delve stats", 4);
+	end;
+end;
+local function Q8(n)
+	local a, s = WorldToScreen(n);
+	if not s or (a.X == 0 and a.Y == 0) then
+		return nil;
+	end;
+	return a;
+end;
+local h8 = nil;
+local T8 = "idle";
+local w8 = q:GetMouse();
+local e8, v8 = nil, nil;
+local y8, M8 = nil, nil;
+local z8 = nil;
+local function l8(n, a, m)
+	if z8 and z8.step < 2 then
+		local n, a = z8.x - w8.X, z8.y - w8.Y;
+		if y8 and (math.abs(n - y8) <= 3 and math.abs(a - M8) <= 3) then
+			e8, v8 = n, a;
+		end;
+		y8, M8 = n, a;
+	end;
+	local j, X;
+	if e8 then
+		j, X = n + e8, a + v8;
+	else
+		j, X = n + 1, a + 24;
+	end;
+	local A, O;
+	if z8 then
+		A, O = z8.fx, z8.fy;
+	end;
+	if e8 then
+		local n, a = w8.X + e8, w8.Y + v8;
+		if not A or (z8.step < 2 and math.abs(n - z8.x) + math.abs(a - z8.y) > 6) then
+			A, O = n, a;
+		end;
+	end;
+	local u = .5;
+	if A and u > 0 then
+		local n = z8 and math.min(m - z8.t, .1) or .016666666666667;
+		local a = 1 - ((u * .9)) ^ ((n * 60));
+		A, O = A + ((j - A)) * a, O + ((X - O)) * a;
+		if math.abs(j - A) + math.abs(X - O) < 1 then
+			A, O = j, X;
+		end;
+	else
+		A, O = j, X;
+	end;
+	local q, c = math.floor(A + .5), math.floor(O + .5);
+	local S = z8 and math.abs(q - z8.x) + math.abs(c - z8.y) or 99;
+	if not z8 or S > 0 then
+		mousemoveabs(q, c);
+	end;
+	z8 = {
+			x = q,
+			y = c,
+			fx = A,
+			fy = O,
+			step = S,
+			t = m,
+		};
+	s.mouseOffset = e8 and string.format("%d,%d", e8, v8) or "measuring";
+end;
+local function B8(n, a)
+	local s = Q8(n);
+	local m = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize;
+	if not s or not m or s.X < 0 or s.Y < 0 or s.X > m.X or s.Y > m.Y then
+		z8 = nil;
+		return;
+	end;
+	l8(s.X, s.Y, a);
+end;
+local P8 = {
+		eval = 0,
+		poll = 0,
+		sweep = 0,
+		refresh = 0,
+		dead = 0,
+		tool = 0,
+	};
+local function nQ()
+	return s.win and (s.win.alive and s.win:IsVisible());
+end;
+local function aQ()
+	local n = q.Character;
+	local a = n and n:FindFirstChild("HumanoidRootPart");
+	return a and a.Position, n;
+end;
+local function sQ(n)
+	if n - P8.tool < .25 then
+		return;
+	end;
+	P8.tool = n;
+	local a = nil;
+	if T8 == "combat" and (m.combat and h8) then
+		a = "weapon";
+	elseif T8 == "mine" and (m.mine and h) then
+		a = "pickaxe";
+	end;
+	if not a or not isrbxactive() or nQ() then
+		return;
+	end;
+	if n - ((s.toolPressAt or -1000000000.0)) < .8 then
+		return;
+	end;
+	local j = q.Character;
+	if not j then
+		return;
+	end;
+	local X;
+	if a == "weapon" then
+		X = j:GetAttribute("WeaponDrawn");
+	else
+		X = j:GetAttribute("PickaxeOut");
+	end;
+	if X == true then
+		return;
+	end;
+	if U8(a == "weapon" and G8 or p8, n) then
+		s.toolPressAt = n;
+		s.toolPresses = ((s.toolPresses or 0)) + 1;
+	end;
+end;
+local mQ = {
+		seenAt = nil,
+		check = 0,
+		phase = "idle",
+		t = 0,
+		bx = 0,
+		by = 0,
+	};
+s.replays = s.replays or 0;
+local function jQ(n)
+	local a, s = pcall(function()
+			return n.AbsoluteSize;
+		end);
+	if a and (typeof(s) == "Vector2" and s.X >= .5) then
+		return s.X, s.Y;
+	end;
+	local m, j = memory_read("float", n.Address + 260), memory_read("float", n.Address + 264);
+	if type(m) == "number" and (m >= .5 and m < 5000) then
+		return m, j;
+	end;
+	return 298, 76;
+end;
+local function XQ()
+	local n = q:FindFirstChild("PlayerGui");
+	local a = n and n:FindFirstChild("RunEnd");
+	local s = a and a:FindFirstChild("Verbs");
+	return s and s:FindFirstChild("Again");
+end;
+local function AQ()
+	if mQ.phase == "down" then
+		mouse1release();
+	end;
+	mQ.phase = "idle";
+end;
+local function OQ(n)
+	if not m.autoReplay then
+		AQ();
+		mQ.seenAt = nil;
+		return false;
+	end;
+	if n - mQ.check >= .5 then
+		mQ.check = n;
+		if workspace:FindFirstChild("RunEndRoom") then
+			mQ.seenAt = mQ.seenAt or n;
+		else
+			mQ.seenAt = nil;
+			AQ();
+		end;
+	end;
+	if not mQ.seenAt or n - mQ.seenAt < 2.5 then
+		return false;
+	end;
+	if not isrbxactive() or nQ() then
+		AQ();
+		return false;
+	end;
+	if mQ.phase == "idle" then
+		if n - mQ.t < 3 then
+			return false;
+		end;
+		local a = XQ();
+		if not a then
+			return false;
+		end;
+		local s = a.AbsolutePosition;
+		local m, j = jQ(a);
+		mQ.bx, mQ.by = s.X + m / 2, s.Y + j / 2;
+		mQ.phase, mQ.t = "move", n;
+	end;
+	if mQ.phase == "move" then
+		l8(mQ.bx, mQ.by, n);
+		local a = math.abs(w8.X - mQ.bx) <= 6 and math.abs(w8.Y - mQ.by) <= 6;
+		if a and (z8 and z8.step == 0) then
+			mQ.phase, mQ.t = "settle", n;
+		elseif n - mQ.t > 2 then
+			mQ.phase, mQ.t = "idle", n;
+		end;
+	elseif mQ.phase == "settle" then
+		l8(mQ.bx, mQ.by, n);
+		if n - mQ.t >= .1 then
+			mouse1press();
+			mQ.phase, mQ.t = "down", n;
+		end;
+	elseif mQ.phase == "down" then
+		if n - mQ.t >= .08 then
+			mouse1release();
+			s.replays = s.replays + 1;
+			mQ.phase, mQ.t = "idle", n;
+		end;
+	end;
+	return true;
+end;
+local uQ = 0;
+local function qQ(n)
+	if n - uQ < 1 then
+		return;
+	end;
+	uQ = n;
+	local a = workspace:FindFirstChild("WeaponCone");
+	if not a then
+		return;
+	end;
+	local m = nil;
+	for n, a in ipairs(a:GetChildren()) do
+		local s = a.Size;
+		if typeof(s) == "Vector3" and (s.X < .3 and s.Z > 1) then
+			if not m or s.Z > m then
+				m = s.Z;
+			end;
+		end;
+	end;
+	if m then
+		s.range = m;
+	end;
+end;
+local function cQ()
+	if s.range then
+		return math.max(2.5, math.min(s.range * .7, m.fightDist));
+	end;
+	return m.fightDist;
+end;
+local function SQ(n, a)
+	if not o or #K < 3 then
+		return true;
+	end;
+	local s, m = r(o, n, a);
+	for n, a in ipairs({
+		{ -0.15, -0.15 },
+		{ .15, -0.15 },
+		{ -0.15, .15 },
+		{ .15, .15 },
+	}) do
+		if not G[math.floor((s + a[1]) + .5) * 4096 + math.floor((m + a[2]) + .5)] then
+			return false;
+		end;
+	end;
+	return true;
+end;
+s.walkable = SQ;
+local function HQ(n, a)
+	if o and #K >= 3 then
+		local a, s = r(o, n.X, n.Z);
+		if not G[math.floor(a + .5) * 4096 + math.floor(s + .5)] then
+			return 0;
+		end;
+	end;
+	local s = 0;
+	if not SQ(n.X + a[1] * 2.5, n.Z + a[2] * 2.5) then
+		s = s + 1;
+	end;
+	if not SQ(n.X + a[1] * 5, n.Z + a[2] * 5) then
+		s = s + 1;
+	end;
+	return s;
+end;
+local function VQ()
+	local n = .7071;
+	return {
+		{ Y, x },
+		{ -Y, -x },
+		{ I, Z },
+		{ -I, -Z },
+		{ ((Y + I)) * n, ((x + Z)) * n },
+		{ ((Y - I)) * n, ((x - Z)) * n },
+		{ ((-Y + I)) * n, ((-x + Z)) * n },
+		{ ((-Y - I)) * n, ((-x - Z)) * n },
+	};
+end;
+local function tQ(n, a)
+	local s = 0;
+	for m, j in ipairs(S8) do
+		local X = i8(j, n, a, 1.5);
+		if X then
+			s = (s + X) + 1;
+		end;
+	end;
+	return s;
+end;
+local CQ;
+local function FQ(n)
+	r8(n);
+	if not next(t8) then
+		CQ = nil;
+		return;
+	end;
+	local a = aQ();
+	if not a then
+		return;
+	end;
+	local m, j = 0, 0;
+	if CQ and n - CQ.t > .001 then
+		m, j = ((a.X - CQ.x)) / ((n - CQ.t)), ((a.Z - CQ.z)) / ((n - CQ.t));
+	end;
+	if not CQ or n - CQ.t >= .05 then
+		CQ = { x = a.X, z = a.Z, t = n };
+	end;
+	local X = .15;
+	for A, O in pairs(t8) do
+		if not O.rolled then
+			local A = (O.hitAt and n >= O.hitAt - X) or (not O.hitAt and O.p >= .9);
+			if A and ((not O.hitAt or n <= O.hitAt + .1)) then
+				local X = O.hitAt and math.max(O.hitAt - n, 0) or 0;
+				if i8(O.zone, a.X + m * X, a.Z + j * X, 1) then
+					O.rolled = true;
+					if isrbxactive() and n - ((s.lastRoll or -1000000000.0)) >= .3 then
+						s.lastRoll = n;
+						W8(n);
+					end;
+				end;
+			end;
+		end;
+	end;
+end;
+local JQ, kQ = 1, 0;
+local function iQ(n, a, j, X)
+	local A = q8(a, X);
+	local O = cQ();
+	local u, q = n.X - A.X, n.Z - A.Z;
+	local c = math.sqrt(u * u + q * q);
+	if c < .001 then
+		u, q, c = I, Z, 1;
+	end;
+	local S, H = (-q / c) * JQ, (u / c) * JQ;
+	local V = {};
+	for n, s in ipairs(j) do
+		if s ~= a then
+			V[#V + 1] = q8(s, X);
+		end;
+	end;
+	local function t(n, a)
+		local s = 0;
+		for m, j in ipairs(V) do
+			if ((j.X - n)) ^ 2 + ((j.Z - a)) ^ 2 < 12.25 then
+				s = s + 1;
+			end;
+		end;
+		return s;
+	end;
+	local C = m.dodge;
+	local F = VQ();
+	local J = C and tQ(n.X, n.Z) or 0;
+	local k = nil;
+	local i = ((J * 16 + math.abs(c - O) * .8) + .4) + t(n.X, n.Z) * 1.5;
+	for a, s in ipairs(F) do
+		local m, j = n.X + s[1] * 2.5, n.Z + s[2] * 2.5;
+		local X, u = n.X + s[1] * 5, n.Z + s[2] * 5;
+		local q = C and (tQ(m, j) + tQ(X, u)) or 0;
+		local c = math.sqrt(((X - A.X)) ^ 2 + ((u - A.Z)) ^ 2);
+		local V = (((q * 8 + HQ(n, s) * 40) + math.abs(c - O) * .8) - ((s[1] * S + s[2] * H)) * 1.2) + t(X, u) * 1.5;
+		if V < i then
+			k, i = s, V;
+		end;
+	end;
+	if k and (k[1] * S + k[2] * H < -0.3 and X - kQ > 1.5) then
+		JQ = -JQ;
+		kQ = X;
+	end;
+	s.dodging = J > 0;
+	if k then
+		L8(k[1], k[2]);
+	else
+		L8(nil);
+	end;
+end;
+local function fQ(n)
+	local a = aQ();
+	if not a then
+		T8, h, w, h8 = "idle", nil, nil, nil;
+		K8();
+		return;
+	end;
+	b();
+	local j = isrbxactive();
+	local X = false;
+	for n, a in pairs(R8) do
+		X = X or a;
+	end;
+	if X then
+		local m = s.stuckRef;
+		if not m or ((a.X - m.x)) ^ 2 + ((a.Z - m.z)) ^ 2 > .25 then
+			s.stuckRef = { x = a.X, z = a.Z, t = n };
+		elseif n - m.t > 1.2 then
+			K8();
+			s.stuckRef = nil;
+			s.unsticks = ((s.unsticks or 0)) + 1;
+		end;
+	else
+		s.stuckRef = nil;
+	end;
+	local A = c8();
+	s.mobCount = #A;
+	if #A > 0 and m.combat then
+		T8 = "combat";
+	elseif m.mine then
+		T8 = "mine";
+	else
+		T8 = "idle";
+	end;
+	h8 = nil;
+	local O, u = nil, nil;
+	for n, m in ipairs(A) do
+		local j = math.sqrt(((m.x - a.X)) ^ 2 + ((m.z - a.Z)) ^ 2);
+		m.d = j;
+		if s.keepTarget == m.addr then
+			j = j - 4;
+		end;
+		if not u or j < u then
+			O, u = m, j;
+		end;
+	end;
+	if T8 == "combat" and (m.combat and O) then
+		h8 = O.addr;
+		s.keepTarget = O.addr;
+	else
+		s.keepTarget = nil;
+	end;
+	if T8 == "mine" then
+		if d(n) then
+			l(a, n);
+		else
+			h, w = nil, nil;
+		end;
+	else
+		h, w = nil, nil;
+		if d(n) then
+			o = W({});
+		end;
+	end;
+	if not j then
+		K8();
+		return;
+	end;
+	if ((m.dodge or m.autoRoll)) and T8 == "combat" then
+		k8(a, n);
+	elseif #S8 > 0 or next(t8) then
+		S8, t8 = {}, {};
+	end;
+	if T8 == "combat" and (m.combat and (m.chase and O)) then
+		qQ(n);
+		iQ(a, O, A, n);
+		return;
+	end;
+	if m.dodge and #S8 > 0 then
+		local n, m, j = 0, 0, false;
+		for s, X in ipairs(S8) do
+			local A, O, u = i8(X, a.X, a.Z, f8);
+			if A then
+				j = true;
+				n, m = n + O * A, m + u * A;
+			end;
+		end;
+		if j then
+			local j = math.sqrt(n * n + m * m);
+			if j < .001 then
+				n, m, j = I, Z, 1;
+			end;
+			local X, A = nil, nil;
+			for s, O in ipairs(VQ()) do
+				local u = tQ(a.X + O[1] * 2.5, a.Z + O[2] * 2.5) + tQ(a.X + O[1] * 5, a.Z + O[2] * 5);
+				local q = (u * 8 + HQ(a, O) * 40) - (((O[1] * n + O[2] * m)) / j) * 2;
+				if not A or q < A then
+					X, A = O, q;
+				end;
+			end;
+			L8(X[1], X[2]);
+			s.dodging = true;
+			return;
+		end;
+	end;
+	s.dodging = false;
+	if m.chests and T8 ~= "combat" then
+		local n = A8(a);
+		if n then
+			local m, j = n.x - a.X, n.z - a.Z;
+			if m * m + j * j > 1 then
+				s.chestWalk = true;
+				L8(m, j);
+				return;
+			end;
+		end;
+	end;
+	s.chestWalk = false;
+	if T8 == "mine" and (m.walk and w) then
+		L8(w.X - a.X, w.Z - a.Z);
+		return;
+	end;
+	L8(nil);
+end;
+s.conn = u.RenderStepped:Connect(function()
+		local n = c();
+		if I8 then
+			b8();
+			return;
+		end;
+		if not s.statsFound and (((s.rockCount or 0)) > 0 and n - Y8 > 30) then
+			N8(true);
+		end;
+		if n - P8.poll >= .1 then
+			P8.poll = n;
+			if ((m.on and true or false)) ~= s.farmOn then
+				X(m.on);
+			end;
+			if x8 then
+				x8();
+			end;
+		end;
+		local a = m.combat or m.chests;
+		if a then
+			if n - P8.sweep >= .5 then
+				P8.sweep, P8.refresh = n, n;
+				X8(n);
+			elseif n - P8.refresh >= .066666666666667 then
+				P8.refresh = n;
+				O8(n);
+			end;
+			if h8 and (B[h8] and n - P8.dead >= .25) then
+				P8.dead = n;
+				u8(h8, B[h8], n);
+			end;
+		elseif next(B) then
+			B = {};
+		end;
+		if n - P8.eval >= .1 then
+			P8.eval = n;
+			fQ(n);
+		end;
+		if m.autoRoll then
+			FQ(n);
+		else
+			r8(n);
+		end;
+		sQ(n);
+		local j = OQ(n);
+		if not j and n - ((P8.aim or 0)) >= .016666666666667 then
+			P8.aim = n;
+			local a = nil;
+			if isrbxactive() and not nQ() then
+				local s = h8 and B[h8];
+				if s and (T8 == "combat" and m.combat) then
+					a = q8(s, n);
+				elseif T8 == "mine" and (m.mine and (h and o)) then
+					a = L(o, h.ax, h.az);
+				end;
+			end;
+			if a then
+				B8(a, n);
+			else
+				z8 = nil;
+			end;
+		end;
+	end);
+local DQ = false;
+s.stop = function()
+		if DQ then
+			return;
+		end;
+		DQ = true;
+		pcall(function()
+			s.conn:Disconnect();
+		end);
+		K8();
+		AQ();
+		r8(0, true);
+		if s.win and s.win.alive then
+			s.win:Unload();
+		end;
+		print("delve stopped");
+	end;
+local RQ;
+do
+	local n;
+	if not rawget(_G, "UI_LOCAL") then
+		local a, s = pcall(game.HttpGet, game, "https://raw.githubusercontent.com/Shoobie-code/linoria-inspired/refs/heads/main/main");
+		if a and (type(s) == "string" and #s > 1000) then
+			n = s;
+			pcall(writefile, "UILib.lua", s);
+		end;
+	end;
+	if not n then
+		pcall(function()
+			n = readfile("UILib.lua");
+		end);
+	end;
+	if type(n) == "string" then
+		pcall(function()
+			(loadstring(n))();
+		end);
+	end;
+	local a = rawget(_G, "UILib");
+	if type(a) == "table" and (not a._dead and a.CreateWindow) then
+		RQ = a;
+	end;
+end;
+if RQ then
+	local n = RQ:CreateWindow({
+			id = "strata",
+			title = "delve",
+			size = { 460, 340 },
+			config = "strata.json",
+			visible = false,
+			onUnload = function()
+				s.stop();
+			end,
+		});
+	s.win = n;
+	local a = {};
+	local j = n:AddTab("Auto farm");
+	local A = j:AddGroup("Auto farm", 1);
+	a.on = A:AddToggle({
+			text = "ON",
+			flag = "st_on",
+			default = m.on,
+			callback = function(n)
+				X(n);
+			end,
+		});
+	a.on:AddKeybind({ flag = "st_on_key" });
+	a.fight = A:AddSlider({
+			text = "Orbit distance",
+			flag = "st_fight",
+			min = 2,
+			max = 30,
+			default = m.fightDist,
+			suffix = " st",
+			callback = function(n)
+				m.fightDist = n;
+			end,
+		});
+	a.autoReplay = A:AddToggle({
+			text = "Auto Replay",
+			flag = "st_autoreplay",
+			default = m.autoReplay,
+			callback = function(n)
+				m.autoReplay = n;
+			end,
+		});
+	n:AddSettingsTab("settings");
+	x8 = function()
+			local function n(n, a)
+				if a ~= nil and n.value ~= a then
+					n:Set(a, true);
+				end;
+			end;
+			n(a.on, m.on and true or false);
+			n(a.fight, tonumber(m.fightDist));
+			n(a.autoReplay, m.autoReplay and true or false);
+		end;
+end;
+N8(true);
+print(string.format("delve running | %s", RQ and "menu: right shift, starts hidden (mouse aim pauses while it is open)" or "UILib unavailable, console only"));
+print("console: _G.Strata.cfg.on (or .mine / .combat / .walk / .chase / .dodge alone) | _G.Strata.readStats() | _G.Strata.stop()");
