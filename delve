@@ -1674,5 +1674,4 @@ if RQ then
 		end;
 end;
 N8(true);
-print(string.format("delve running | %s", RQ and "menu: right shift, starts hidden (mouse aim pauses while it is open)" or "UILib unavailable, console only"));
-print("console: _G.Strata.cfg.on (or .mine / .combat / .walk / .chase / .dodge alone) | _G.Strata.readStats() | _G.Strata.stop()");
+print(string.format("delve running")
