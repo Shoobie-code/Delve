@@ -1674,4 +1674,4 @@ if RQ then
 		end;
 end;
 N8(true);
-print("delve running"))
+print("delve running")
